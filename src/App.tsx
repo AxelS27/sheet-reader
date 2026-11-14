@@ -80,6 +80,7 @@ export default function App() {
             transition={{ duration: 0.25 }}
           >
             <QuestRoadmap
+              initialMode={selectedMode}
               onBackToHome={() => setView('landing')}
               onSelectLevelAndPlay={handleSelectLevelAndPlay}
               isMidiConnected={isMidiConnected}

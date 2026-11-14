@@ -22,6 +22,7 @@ import { MidiDevice } from '@/utils/midi';
 import { sound } from '@/utils/audio';
 
 interface QuestRoadmapProps {
+  initialMode?: GameModeId;
   onBackToHome: () => void;
   onSelectLevelAndPlay: (modeId: GameModeId, startLevel?: number) => void;
   isMidiConnected: boolean;
@@ -46,13 +47,21 @@ const ROADMAP_12_COORDS: Array<{ x: number; y: number }> = [
 ];
 
 export const QuestRoadmap: React.FC<QuestRoadmapProps> = ({
+  initialMode = 'treble',
   onBackToHome,
   onSelectLevelAndPlay,
   isMidiConnected,
   midiDevices,
   onConnectMidi,
 }) => {
-  const [activeTab, setActiveTab] = useState<GameModeId>('treble');
+  const [activeTab, setActiveTab] = useState<GameModeId>(initialMode);
+
+  // Sync tab if initialMode changes
+  React.useEffect(() => {
+    if (initialMode) {
+      setActiveTab(initialMode);
+    }
+  }, [initialMode]);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
   // Read saved progress from localStorage for this mode
