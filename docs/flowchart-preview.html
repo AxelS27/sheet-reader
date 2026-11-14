@@ -61,34 +61,35 @@
     <div style="text-align: center; margin-bottom: 36px;">
       <span class="tag">NOTEY FLOW ARCHITECTURE</span>
       <h1 style="font-size: 38px; margin: 8px 0;">Notey Visual Flowcharts 🎼</h1>
-      <p style="color: #64748B; font-weight: 600;">Streamlined 2-Screen User Journey & Incremental Note Progression Loop</p>
+      <p style="color: #64748B; font-weight: 600;">3D Quest Roadmap Hub, Incremental Note Progression & Web MIDI</p>
     </div>
 
     <!-- Diagram 1 -->
     <div class="card">
       <span class="tag">FLOW 1</span>
-      <h2>1. Streamlined 2-Screen User Journey</h2>
-      <p style="color: #64748B; font-size: 14px;">Direct flow: Landing Page (with Integrated Mode Selector) directly into Play Arena.</p>
+      <h2>1. 3D Quest Roadmap User Journey</h2>
+      <p style="color: #64748B; font-size: 14px;">Landing Page -> 3D Isometric Island Roadmap (Treble, Bass, Grand Staff) -> Play Arena.</p>
       <div class="mermaid">
 flowchart TD
     Start([User Visits Notey]) --> Landing[Landing Page]
-    
-    subgraph LandingHub [Landing Page Features]
-        Landing --> HeroBanner[Pure 3D Cinematic Piano Wonderland]
-        Landing --> SelectorBar[Docked Mode Selector Bar]
-        Landing --> QuickTrial[Live Interactive Note Trial Board]
+    Landing -->|Click 'Play Now' or Quest Cards| Roadmap[🗺️ 3D Quest Roadmap Page]
+
+    subgraph 3DIslandRoadway [3D Floating Island Roadmap]
+        Roadmap --> TabTreble[🎼 Treble Clef Path: Level C4 to C5]
+        Roadmap --> TabBass[🎹 Bass Clef Path: Level C4 to C3]
+        Roadmap --> TabGrand[🌟 Grand Staff Path: Level C3 to C5]
+        
+        Roadmap --> IslandTiers[3-Tier Mountain Island with Winding Road]
+        IslandTiers --> NodeCompleted[Level Checked / Green]
+        IslandTiers --> NodeActive[Current Level Pulse / PLAY]
+        IslandTiers --> NodeLocked[Upcoming Levels Locked 🔒]
     end
 
-    subgraph SelectorModes [Tabs: All | Learn | Challenge]
-        SelectorBar --> TabLearn[Learn: Treble Clef, Bass Clef, Grand Staff, Starter]
-        SelectorBar --> TabChallenge[Challenge: Daily Streak 60s, Speed Rush, Mini Melodies]
-    end
+    NodeActive -->|Tap Level Checkpoint| PlayArena[🎮 Enter Play Arena Directly]
+    NodeCompleted -->|Replay Level| PlayArena
 
-    TabLearn -->|Click Any Quest Card| PlayArena[🎮 Enter Play Arena Directly]
-    TabChallenge -->|Click Any Quest Card| PlayArena
-    HeroBanner -->|Click 'Play Now'| PlayArena
-
-    PlayArena -->|Click 'Quests' Back Button| Landing
+    PlayArena -->|Click 'Quests' Back Button| Roadmap
+    Roadmap -->|Click 'Home' Back Button| Landing
       </div>
     </div>
 
@@ -96,10 +97,10 @@ flowchart TD
     <div class="card">
       <span class="tag">FLOW 2</span>
       <h2>2. Incremental Gameplay Loop (5 Hits = Unlock Next Note)</h2>
-      <p style="color: #64748B; font-size: 14px;">Scaffolded learning: Level 1 starts with C only. 5 hits unlocks D, then E, progressively.</p>
+      <p style="color: #64748B; font-size: 14px;">Level by level note introduction with punishment and local persistence.</p>
       <div class="mermaid">
 flowchart TD
-    EnterArena([Enter Quest]) --> InitLevel[Init Level 1: Only Anchor Note C]
+    EnterArena([Enter Quest]) --> InitLevel[Init Level with Active Pool]
     InitLevel --> RandomTarget[Pick Random Target Note from Active Pool]
     
     RandomTarget --> RenderStaff[Draw Musical Staff & Target Note]
@@ -114,26 +115,23 @@ flowchart TD
 
     ExtractPitch --> Compare{Pitch == Target Note?}
 
-    Compare -->|YES / CORRECT| CorrectEffect[Note Turns Green + Flash]
-    CorrectEffect --> SuccessSound[Play Victory Chime]
-    SuccessSound --> Confetti[Burst Mini Confetti]
-    Confetti --> AddStreak[Streak +1 & Stars +10]
+    Compare -->|YES / CORRECT| CorrectEffect[Note Turns Green]
+    CorrectEffect --> AddStreak[Streak +1 & Stars +10]
     AddStreak --> AddHit[Hits In Level +1]
     
     AddHit --> CheckLevelUp{Hits >= 5?}
-    CheckLevelUp -->|No| DelayNext[Short 0.6s Delay] --> RandomTarget
+    CheckLevelUp -->|No| DelayNext[Speed Delay] --> RandomTarget
     
     CheckLevelUp -->|Yes: More Notes Remain| LevelUpModal[🎉 Popup: New Note Unlocked Modal!]
-    LevelUpModal --> AddNoteToPool[Add Next Note to Active Pool & Hits = 0]
+    LevelUpModal --> AddNoteToPool[Add Next Note to Active Pool & Save to LocalStorage]
     AddNoteToPool --> RandomTarget
 
     CheckLevelUp -->|Yes: All Notes Mastered| ClefMasterModal[👑 Popup: Clef Master Trophy!]
 
-    Compare -->|NO / WRONG| WrongEffect[Note Shakes + Turns Red]
-    WrongEffect --> BuzzerSound[Play Playful Soft Buzzer]
-    BuzzerSound --> ResetStreak[Reset Streak to 0]
-    ResetStreak --> OptionalHint[Show Glowing Key Hint]
-    OptionalHint --> AwaitInput
+    Compare -->|NO / WRONG| WrongEffect[Note Turns Red]
+    WrongEffect --> ResetStreak[Reset Streak to 0]
+    ResetStreak --> Punishment[Hits -1 Saved in LocalStorage]
+    Punishment --> AwaitInput
       </div>
     </div>
   </div>

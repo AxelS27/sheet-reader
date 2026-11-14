@@ -1,12 +1,10 @@
 # 🎼 Notey - System & User Flowcharts
 
-This document outlines the architecture, user journeys, MIDI hardware connectivity, and incremental learning gameplay loop for **Notey**.
+This document outlines the architecture, user journeys, 3D Quest Roadmap, MIDI hardware connectivity, and incremental learning gameplay loop for **Notey**.
 
 ---
 
-## 1. High-Level User Journey (Streamlined 2-Screen Flow)
-
-Because the mode selector is integrated directly into the landing page, there are no redundant intermediate screens.
+## 1. High-Level User Journey (3D Quest Roadmap Hub)
 
 ```mermaid
 flowchart TD
@@ -18,24 +16,32 @@ flowchart TD
         Landing --> QuickTrial[Live Interactive Note Trial Board]
     end
 
-    subgraph SelectorModes [Tabs: All | Learn | Challenge]
-        SelectorBar --> TabLearn[Learn: Treble Clef, Bass Clef, Grand Staff, Starter]
-        SelectorBar --> TabChallenge[Challenge: Daily Streak 60s, Speed Rush, Mini Melodies]
+    Landing -->|Click 'Play Now' or Quest Cards| Roadmap[🗺️ 3D Quest Roadmap Page]
+
+    subgraph 3DIslandRoadway [3D Floating Island Roadmap]
+        Roadmap --> TabTreble[🎼 Treble Clef Path: Level C4 to C5]
+        Roadmap --> TabBass[🎹 Bass Clef Path: Level C4 to C3]
+        Roadmap --> TabGrand[🌟 Grand Staff Path: Level C3 to C5]
+        
+        Roadmap --> IslandTiers[3-Tier Mountain Island with Winding Road]
+        IslandTiers --> NodeCompleted[Level Checked / Green]
+        IslandTiers --> NodeActive[Current Level Pulse / PLAY]
+        IslandTiers --> NodeLocked[Upcoming Levels Locked 🔒]
     end
 
-    TabLearn -->|Click Any Quest Card| PlayArena[🎮 Enter Play Arena Directly]
-    TabChallenge -->|Click Any Quest Card| PlayArena
-    HeroBanner -->|Click 'Play Now'| PlayArena
+    NodeActive -->|Tap Level Checkpoint| PlayArena[🎮 Enter Play Arena Directly]
+    NodeCompleted -->|Replay Level| PlayArena
 
     subgraph GameplayExperience [Arena Latihan]
         PlayArena --> IncrementalEngine[Incremental Note Progression Engine]
-        IncrementalEngine --> Level1[Level 1: Only Note C]
-        Level1 -->|5 Correct Hits| UnlockD[Level 2: Unlock D -> Pool [C, D]]
-        UnlockD -->|5 Correct Hits| UnlockE[Level 3: Unlock E -> Pool [C, D, E]]
-        UnlockE -->|Progressively| ClefMaster[🏆 Clef Master: All Notes Unlocked!]
+        IncrementalEngine --> Level1[Level C4: Only Note C]
+        Level1 -->|5 Correct Hits| UnlockD[Level D4: Unlock D -> Pool [C, D]]
+        UnlockD -->|5 Correct Hits| UnlockE[Level E4: Unlock E -> Pool [C, D, E]]
+        UnlockE -->|Progressively| ClefMaster[👑 Clef Master: All Notes Unlocked!]
     end
 
-    PlayArena -->|Click 'Quests' Back Button| Landing
+    PlayArena -->|Click 'Quests' Back Button| Roadmap
+    Roadmap -->|Click 'Home' Back Button| Landing
 ```
 
 ---
@@ -44,7 +50,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    EnterArena([Enter Quest]) --> InitLevel[Init Level 1: Only Anchor Note C]
+    EnterArena([Enter Quest]) --> InitLevel[Init Level with Active Pool]
     InitLevel --> RandomTarget[Pick Random Target Note from Active Pool]
     
     RandomTarget --> RenderStaff[Draw Musical Staff & Target Note]
@@ -60,27 +66,24 @@ flowchart TD
     ExtractPitch --> Compare{Pitch == Target Note?}
 
     %% CORRECT PATH
-    Compare -->|YES / CORRECT| CorrectEffect[Note Turns Green + Flash]
-    CorrectEffect --> SuccessSound[Play Victory Chime]
-    SuccessSound --> Confetti[Burst Mini Confetti]
-    Confetti --> AddStreak[Streak +1 & Stars +10]
+    Compare -->|YES / CORRECT| CorrectEffect[Note Turns Green]
+    CorrectEffect --> AddStreak[Streak +1 & Stars +10]
     AddStreak --> AddHit[Hits In Level +1]
     
     AddHit --> CheckLevelUp{Hits >= 5?}
-    CheckLevelUp -->|No| DelayNext[Short 0.6s Delay] --> RandomTarget
+    CheckLevelUp -->|No| DelayNext[Speed Delay] --> RandomTarget
     
     CheckLevelUp -->|Yes: More Notes Remain| LevelUpModal[🎉 Popup: New Note Unlocked Modal!]
-    LevelUpModal --> AddNoteToPool[Add Next Note to Active Pool & Hits = 0]
+    LevelUpModal --> AddNoteToPool[Add Next Note to Active Pool & Save to LocalStorage]
     AddNoteToPool --> RandomTarget
 
     CheckLevelUp -->|Yes: All Notes Mastered| ClefMasterModal[👑 Popup: Clef Master Trophy!]
 
     %% WRONG PATH
-    Compare -->|NO / WRONG| WrongEffect[Note Shakes + Turns Red]
-    WrongEffect --> BuzzerSound[Play Playful Soft Buzzer]
-    BuzzerSound --> ResetStreak[Reset Streak to 0]
-    ResetStreak --> OptionalHint[Show Glowing Key Hint]
-    OptionalHint --> AwaitInput
+    Compare -->|NO / WRONG| WrongEffect[Note Turns Red]
+    WrongEffect --> ResetStreak[Reset Streak to 0]
+    ResetStreak --> Punishment[Hits -1 Saved in LocalStorage]
+    Punishment --> AwaitInput
 ```
 
 ---
