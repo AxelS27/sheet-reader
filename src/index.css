@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Fredoka", cursive, sans-serif;
+  --font-body: "Nunito", sans-serif;
+  
+  --color-brand-yellow: #FBBF24;
+  --color-brand-orange: #FB923C;
+  --color-brand-purple: #8B5CF6;
+  --color-brand-pink: #EC4899;
+  --color-brand-green: #10B981;
+  --color-brand-blue: #38BDF8;
+}
+
+body {
+  font-family: var(--font-body);
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display);
+}
+
+/* 3D bouncy kid-game button style (Duolingo / Nintendo style) */
+.btn-bouncy {
+  transition: all 0.12s ease-in-out;
+  transform: translateY(0);
+}
+
+.btn-bouncy:active {
+  transform: translateY(4px) !important;
+}
+
+/* Custom playful shadows */
+.shadow-fun-yellow {
+  box-shadow: 0 6px 0 #D97706;
+}
+.shadow-fun-yellow:active {
+  box-shadow: 0 2px 0 #D97706;
+}
+
+.shadow-fun-purple {
+  box-shadow: 0 6px 0 #6D28D9;
+}
+.shadow-fun-purple:active {
+  box-shadow: 0 2px 0 #6D28D9;
+}
+
+.shadow-fun-green {
+  box-shadow: 0 6px 0 #047857;
+}
+.shadow-fun-green:active {
+  box-shadow: 0 2px 0 #047857;
+}
+
+.shadow-fun-blue {
+  box-shadow: 0 6px 0 #0284C7;
+}
+.shadow-fun-blue:active {
+  box-shadow: 0 2px 0 #0284C7;
+}
+
+.shadow-card-fun {
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.06), 0 20px 25px -5px rgba(0, 0, 0, 0.05);
+}
+
+/* Floating animation */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(2deg);
+  }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float 4.5s ease-in-out 1.5s infinite;
+}
