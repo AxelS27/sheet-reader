@@ -9,14 +9,19 @@ import {
   Volume2,
   VolumeX,
   Trophy,
-  Sparkles,
   ChevronRight,
   Lock,
 } from 'lucide-react';
 import { StaffViewer } from './StaffViewer';
 import { InteractivePiano } from './InteractivePiano';
-import { GameModeId, NoteItem } from '@/types/game';
-import { TREBLE_PROGRESSION, BASS_PROGRESSION, C3_TO_C5_NOTES, GAME_MODES } from '@/utils/notes';
+import { GameModeId } from '@/types/game';
+import {
+  PITCH_LEVELS,
+  PitchLevel,
+  NoteInstance,
+  getUnlockedNoteInstances,
+  GAME_MODES,
+} from '@/utils/notes';
 import { midiManager, MidiDevice } from '@/utils/midi';
 import { sound } from '@/utils/audio';
 import { progressStorage, NoteSpeed, NoteColorMode } from '@/utils/storage';
@@ -41,30 +46,30 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
 }) => {
   const currentMode = GAME_MODES.find((m) => m.id === modeId) || GAME_MODES[0];
 
-  // Full progression ladder: Treble (C4-C5), Bass (C3-C4), Grand (C3-C5)
-  const fullProgression: NoteItem[] = useMemo(() => {
-    if (modeId === 'bass') return BASS_PROGRESSION;
-    if (modeId === 'grand') return C3_TO_C5_NOTES;
-    return TREBLE_PROGRESSION;
-  }, [modeId]);
-
-  // Load saved progress from localStorage for this mode
+  // Restore saved level (1 to 12) from localStorage
   const initialModeProgress = useMemo(() => {
     return progressStorage.getModeProgress(modeId);
   }, [modeId]);
 
-  // Current unlocked level (1-indexed) restored from localStorage
-  const [level, setLevel] = useState(initialModeProgress.level);
-  const [hitsInLevel, setHitsInLevel] = useState(initialModeProgress.hitsInLevel);
+  const [level, setLevel] = useState(Math.max(1, Math.min(12, initialModeProgress.level || 1)));
+  const [hitsInLevel, setHitsInLevel] = useState(initialModeProgress.hitsInLevel || 0);
 
-  // Active pool of unlocked notes
-  const activePool: NoteItem[] = useMemo(() => {
-    return fullProgression.slice(0, Math.min(level, fullProgression.length));
-  }, [fullProgression, level]);
+  // Active pool of note instances (e.g. at Level C, contains C3, C4, C5, C6)
+  const activePool: NoteInstance[] = useMemo(() => {
+    return getUnlockedNoteInstances(modeId, level);
+  }, [modeId, level]);
 
-  const currentLevelNote = fullProgression[level - 1] || fullProgression[0];
+  const currentPitchLevel: PitchLevel = PITCH_LEVELS[level - 1] || PITCH_LEVELS[0];
 
-  // Practice settings (Speed & Note Color Mode) with LocalStorage persistence
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [feedback, setFeedback] = useState<'idle' | 'correct' | 'wrong'>('idle');
+  const [streak, setStreak] = useState(0);
+  const [totalStars, setTotalStars] = useState(() => progressStorage.get().totalStars);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [activeMidiKeys, setActiveMidiKeys] = useState<number[]>([]);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Practice settings (Speed & Note Color Mode)
   const [practiceSpeed, setPracticeSpeed] = useState<NoteSpeed>(
     () => progressStorage.getPracticeSettings().speed
   );
@@ -88,16 +93,8 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
     progressStorage.savePracticeSettings({ colorMode });
   };
 
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [feedback, setFeedback] = useState<'idle' | 'correct' | 'wrong'>('idle');
-  const [streak, setStreak] = useState(0);
-  const [totalStars, setTotalStars] = useState(() => progressStorage.get().totalStars);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [activeMidiKeys, setActiveMidiKeys] = useState<number[]>([]);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  // Modal celebration state for new unlocked note
-  const [unlockedNoteModal, setUnlockedNoteModal] = useState<NoteItem | null>(null);
+  // Modal celebration state for new unlocked pitch class
+  const [unlockedPitchModal, setUnlockedPitchModal] = useState<PitchLevel | null>(null);
   const [isClefMastered, setIsClefMastered] = useState(initialModeProgress.isMastered);
 
   const currentTargetNote = activePool[currentIndex] || activePool[0];
@@ -113,7 +110,7 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
 
   const handleNoteInput = useCallback(
     (inputMidi: number) => {
-      if (unlockedNoteModal || isClefMastered) return;
+      if (unlockedPitchModal || isClefMastered) return;
 
       setActiveMidiKeys([inputMidi]);
       setTimeout(() => setActiveMidiKeys([]), 250);
@@ -127,23 +124,21 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
         setStreak(newStreak);
         progressStorage.recordStreak(newStreak);
 
-        // Persist stars to localStorage
         const updatedStars = progressStorage.addStars(10);
         setTotalStars(updatedStars);
 
         const newHits = hitsInLevel + 1;
         setHitsInLevel(newHits);
 
-        // Check if level completed / new note unlocked!
+        // Check if level completed / new pitch class unlocked!
         if (newHits >= REQUIRED_HITS_PER_NOTE) {
-          if (level < fullProgression.length) {
+          if (level < PITCH_LEVELS.length) {
             const nextLevel = level + 1;
-            const nextNote = fullProgression[level];
+            const nextPitch = PITCH_LEVELS[level]; // e.g. D, E, F...
             setLevel(nextLevel);
             setHitsInLevel(0);
-            setUnlockedNoteModal(nextNote);
+            setUnlockedPitchModal(nextPitch);
 
-            // Persist new level to localStorage
             progressStorage.saveModeProgress(modeId, nextLevel, 0, false);
 
             if (soundEnabled) sound.playSuccessChime();
@@ -154,7 +149,7 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
             });
             return;
           } else {
-            // Mastered all notes in this Clef!
+            // Mastered all 12 pitch levels!
             setIsClefMastered(true);
             progressStorage.saveModeProgress(modeId, level, newHits, true);
 
@@ -168,7 +163,6 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
           }
         }
 
-        // Persist current hits in level
         progressStorage.saveModeProgress(modeId, level, newHits, false);
 
         setTimeout(() => {
@@ -180,7 +174,6 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
         setStreak(0);
         const reducedHits = Math.max(0, hitsInLevel - 1);
         setHitsInLevel(reducedHits);
-        // Persist punishment to localStorage
         progressStorage.saveModeProgress(modeId, level, reducedHits, false);
 
         setTimeout(() => {
@@ -194,8 +187,10 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
       soundEnabled,
       hitsInLevel,
       level,
-      fullProgression,
-      unlockedNoteModal,
+      modeId,
+      streak,
+      practiceSpeed,
+      unlockedPitchModal,
       isClefMastered,
     ]
   );
@@ -212,10 +207,9 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
 
   return (
     <div className="min-h-screen bg-[#FFFDF5] text-slate-800 flex flex-col justify-between font-sans">
-      {/* 1. CONSISTENT WARM CORAL TOP NAVBAR */}
+      {/* 1. TOP NAVBAR */}
       <header className="w-full bg-[#FF5A36] border-b-2 border-[#E04825] sticky top-0 z-50 shadow-md">
         <div className="w-full max-w-[1720px] mx-auto px-4 sm:px-8 lg:px-14 xl:px-16 py-2.5 flex items-center justify-between gap-4">
-          {/* Left: Brand Logo + Back Button */}
           <div className="flex items-center gap-4">
             <div
               className="flex items-center gap-2 cursor-pointer select-none"
@@ -231,7 +225,6 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
               </div>
             </div>
 
-            {/* Back Button */}
             <button
               type="button"
               onClick={onBackToMenu}
@@ -241,16 +234,14 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
               <span>Quests</span>
             </button>
 
-            {/* Current Quest Badge */}
             <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white font-black text-xs">
               <span>{currentMode.icon}</span>
               <span>{currentMode.title}</span>
               <span className="opacity-70">•</span>
-              <span className="text-amber-200">Level {currentLevelNote.name}</span>
+              <span className="text-amber-200">Level {currentPitchLevel.displayName}</span>
             </span>
           </div>
 
-          {/* Right: Sound Toggle + Connect MIDI Button */}
           <div className="flex items-center gap-2.5">
             <button
               type="button"
@@ -282,20 +273,20 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
         </div>
       </header>
 
-      {/* 2. PURE PROGRESS BAR & STREAK / STARS ROW (EXPANDED & THICKER) */}
+      {/* 2. PURE PROGRESS BAR & 12 PITCH LEVEL BADGES */}
       <div className="max-w-2xl w-full mx-auto mt-4 px-4 space-y-2.5">
         <div className="flex items-center justify-between text-sm sm:text-base font-extrabold px-1">
-          {/* Level by Note Name */}
+          {/* Level Name: e.g. Level C, Level D */}
           <div className="flex items-center gap-2.5 text-slate-600">
             <span className="font-display font-black text-slate-900 text-base sm:text-lg">
-              Level {currentLevelNote.name}
+              Level {currentPitchLevel.displayName} ({currentPitchLevel.solfege})
             </span>
             <span className="text-xs sm:text-sm bg-amber-100 text-amber-950 px-3 py-0.5 rounded-full font-black border border-amber-300 shadow-2xs">
               {hitsInLevel} / {REQUIRED_HITS_PER_NOTE} Hits
             </span>
           </div>
 
-          {/* Streak 🔥 & Stars ⭐ */}
+          {/* Streak & Stars */}
           <div className="flex items-center gap-2.5">
             <div className="flex items-center gap-1.5 text-orange-600 font-black text-xs sm:text-sm bg-orange-50 px-3 py-1 rounded-full border border-orange-200 shadow-xs">
               <Flame className="w-4 h-4 fill-orange-500 animate-bounce" />
@@ -309,7 +300,7 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
           </div>
         </div>
 
-        {/* Big, Chunky Progress Bar Track */}
+        {/* Big Progress Bar Track */}
         <div className="w-full bg-slate-200/90 h-4 sm:h-5 rounded-full overflow-hidden p-0.5 shadow-inner border border-slate-300/80">
           <motion.div
             className={`h-full rounded-full transition-colors duration-200 shadow-sm ${
@@ -323,20 +314,20 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
           />
         </div>
 
-        {/* Unlocked Note Buttons (C3 to C5) */}
-        <div className="flex items-center justify-center gap-2 flex-wrap pt-1.5">
-          {fullProgression.map((n, idx) => {
+        {/* 12 Pitch Level Badges (C to Bb) */}
+        <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-wrap pt-1.5">
+          {PITCH_LEVELS.map((p, idx) => {
             const isUnlocked = idx < level;
             return (
               <button
-                key={`${n.clef}-${n.name}-${idx}`}
+                key={p.pitchClass}
                 type="button"
                 onClick={() => {
-                  if (isUnlocked) sound.playMidiNote(n.midi);
+                  if (isUnlocked) sound.playMidiNote(60 + p.semitone);
                 }}
                 disabled={!isUnlocked}
-                title={isUnlocked ? `Click to hear ${n.name}` : `Locked (Reach Level ${idx + 1})`}
-                className={`text-xs sm:text-sm font-extrabold px-3 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 ${
+                title={isUnlocked ? `Click to hear ${p.displayName}` : `Locked (Reach Level ${p.displayName})`}
+                className={`text-xs sm:text-sm font-extrabold px-3 py-1 rounded-xl border transition-all flex items-center gap-1.5 ${
                   isUnlocked
                     ? 'bg-white hover:bg-amber-50 text-slate-800 border-amber-300 shadow-xs cursor-pointer active:scale-95'
                     : 'bg-slate-200/60 text-slate-400 border-slate-300 cursor-not-allowed opacity-50'
@@ -346,14 +337,14 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
                   <>
                     <span
                       className="w-2.5 h-2.5 rounded-full shrink-0"
-                      style={{ backgroundColor: n.color }}
+                      style={{ backgroundColor: p.color }}
                     />
-                    <span>{n.name}</span>
+                    <span>{p.displayName}</span>
                   </>
                 ) : (
                   <>
                     <Lock className="w-3 h-3 text-slate-400 shrink-0" />
-                    <span>{n.name}</span>
+                    <span>{p.displayName}</span>
                   </>
                 )}
               </button>
@@ -362,7 +353,7 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
         </div>
       </div>
 
-      {/* 3. CENTER STAGE: NOTATION BOARD (CENTERED & CLEAN) */}
+      {/* 3. CENTER STAGE: NOTATION BOARD + SETTINGS GEAR */}
       <div className="w-full max-w-3xl mx-auto my-auto px-4 py-2 flex items-center justify-center relative">
         <StaffViewer
           note={currentTargetNote}
@@ -371,7 +362,6 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
           colorMode={noteColorMode}
           headerAction={
             <div className="relative">
-              {/* Gear Settings Button on Card Header */}
               <button
                 type="button"
                 onClick={() => setIsSettingsOpen(!isSettingsOpen)}
@@ -382,14 +372,14 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
                 }`}
                 title="Practice Settings"
               >
-                <Settings className={`w-4 h-4 transition-transform duration-300 ${isSettingsOpen ? 'rotate-90' : ''}`} />
+                <Settings
+                  className={`w-4 h-4 transition-transform duration-300 ${isSettingsOpen ? 'rotate-90' : ''}`}
+                />
               </button>
 
-              {/* Popover Settings Menu (Opens ONLY when gear is clicked!) */}
               <AnimatePresence>
                 {isSettingsOpen && (
                   <>
-                    {/* Backdrop to close when clicking outside */}
                     <div
                       className="fixed inset-0 z-40"
                       onClick={() => setIsSettingsOpen(false)}
@@ -416,7 +406,6 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
                         </button>
                       </div>
 
-                      {/* Setting 1: Note Speed */}
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between text-xs font-extrabold text-slate-600">
                           <span className="flex items-center gap-1">
@@ -446,7 +435,6 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
                         </div>
                       </div>
 
-                      {/* Setting 2: Note Color Style */}
                       <div className="space-y-1.5 pt-1">
                         <div className="flex items-center justify-between text-xs font-extrabold text-slate-600">
                           <span className="flex items-center gap-1">
@@ -505,7 +493,7 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
 
       {/* 5. LEVEL UNLOCK CELEBRATION MODAL */}
       <AnimatePresence>
-        {unlockedNoteModal && (
+        {unlockedPitchModal && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
             <motion.div
               initial={{ scale: 0.7, opacity: 0, y: 20 }}
@@ -519,38 +507,38 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
 
               <div>
                 <span className="text-xs font-black uppercase tracking-wider text-amber-600 bg-amber-100 px-3 py-1 rounded-full">
-                  Level {unlockedNoteModal.name} Unlocked!
+                  Level {unlockedPitchModal.displayName} Unlocked!
                 </span>
                 <h3 className="font-display font-black text-2xl sm:text-3xl text-slate-900 mt-2">
-                  New Note Unlocked!
+                  New Key Unlocked!
                 </h3>
                 <p className="text-slate-600 text-xs sm:text-sm font-semibold mt-1">
-                  You mastered the previous notes. Now welcome:
+                  You mastered the previous pitch classes. Now welcome:
                 </p>
               </div>
 
-              {/* Big Note Badge */}
+              {/* Big Pitch Badge */}
               <div className="bg-amber-50 rounded-2xl p-4 border-2 border-amber-200 flex items-center justify-center gap-3">
                 <span
                   className="w-5 h-5 rounded-full border-2 border-slate-700"
-                  style={{ backgroundColor: unlockedNoteModal.color }}
+                  style={{ backgroundColor: unlockedPitchModal.color }}
                 />
                 <span className="font-display font-black text-3xl text-slate-900">
-                  {unlockedNoteModal.name}
+                  {unlockedPitchModal.displayName}
                 </span>
                 <span className="text-sm font-bold text-amber-700">
-                  ({unlockedNoteModal.solfege})
+                  ({unlockedPitchModal.solfege})
                 </span>
               </div>
 
               <p className="text-[11px] font-bold text-slate-500">
-                This note will now be added to your random practice pool!
+                All {unlockedPitchModal.displayName} notes across octaves are now added to your quest pool!
               </p>
 
               <button
                 type="button"
                 onClick={() => {
-                  setUnlockedNoteModal(null);
+                  setUnlockedPitchModal(null);
                   pickNextNote();
                 }}
                 className="w-full btn-bouncy py-3.5 px-4 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-900 font-display font-black text-base border-2 border-amber-500 shadow-fun-yellow flex items-center justify-center gap-2 cursor-pointer"
@@ -563,7 +551,7 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 6. CLEF MASTERED CELEBRATION MODAL */}
+      {/* 6. MASTERED CELEBRATION MODAL */}
       <AnimatePresence>
         {isClefMastered && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -579,13 +567,13 @@ export const PlayArena: React.FC<PlayArenaProps> = ({
 
               <div>
                 <span className="text-xs font-black uppercase tracking-wider text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">
-                  All Notes Mastered!
+                  All 12 Keys Mastered!
                 </span>
                 <h3 className="font-display font-black text-2xl sm:text-3xl text-slate-900 mt-2">
-                  Clef Master! 👑
+                  Grand Master! 👑
                 </h3>
                 <p className="text-slate-600 text-xs sm:text-sm font-semibold mt-1">
-                  Incredible! You unlocked every single note in this Clef quest with a total of{' '}
+                  Incredible! You unlocked every single musical key in this quest with a total of{' '}
                   <span className="text-amber-600 font-extrabold">{totalStars} Stars</span>!
                 </p>
               </div>
